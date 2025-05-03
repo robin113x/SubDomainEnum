@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deep Subdomain Scanner</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    p {
+      color: #555;
+      margin-bottom: 20px;
+      text-align: center;
+      max-width: 600px;
+    }
+
+    .scanner-box {
+      background: #fff;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      max-width: 700px;
+      width: 100%;
+    }
+
+    textarea, input, button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      margin-top: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #a78bfa;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #7c3aed;
+    }
+
+    .progress-container {
+      margin-top: 20px;
+    }
+
+    #progressWrapper {
+      display: none;
+      margin: 10px 0;
+    }
+
+    .progress-bar {
+      height: 20px;
+      background-color: #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background-color: #22c55e;
+      text-align: center;
+      color: white;
+      transition: width 0.3s;
+    }
+
+    #resultSection {
+      margin-top: 25px;
+      display: none;
+    }
+
+    #subCount {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .download-btn {
+      background-color: #10b981;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Deep Subdomain Scanner</h1>
+  <p>Find subdomains using multiple sources including DNS, SSL certificates, HackerTarget, BufferOver, and Shodan.</p>
+
+  <div class="scanner-box">
+    <textarea id="domainInput" placeholder="Enter one domain per line (e.g. example.com)" rows="4"></textarea>
+    <input type="text" id="shodanKeyInput" placeholder="Enter your Shodan API key (optional)">
+    <button onclick="scan()">Start Deep Scan</button>
+
+    <div id="progressWrapper" class="progress-container">
+      <div>Scanning: <span id="statusDomain"></span></div>
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-bar-fill">0%</div>
+      </div>
+    </div>
+
+    <div id="resultSection">
+      <div id="subCount">Found 0 subdomains:</div>
+      <ul id="results"></ul>
+      <button class="download-btn" onclick="downloadResults()">Download Results</button>
+    </div>
+  </div>
+
+  <script>
+    let currentResults = [];
+
+    function setProgress(percent) {
+      const fill = document.getElementById("progressFill");
+      fill.style.width = percent + "%";
+      fill.textContent = Math.floor(percent) + "%";
+    }
+
+    async function scan() {
+      const domainInput = document.getElementById("domainInput").value.trim();
+      const shodanKey = document.getElementById("shodanKeyInput").value.trim();
+      const resultsList = document.getElementById("results");
+      const progress = document.getElementById("progressWrapper");
+      const resultBox = document.getElementById("resultSection");
+      const subCount = document.getElementById("subCount");
+      const statusDomain = document.getElementById("statusDomain");
+
+      const domains = domainInput
+        .split("\n")
+        .map(d => d.trim())
+        .filter(d => d && d.includes("."));
+
+      if (domains.length === 0) {
+        alert("Please enter at least one valid domain.");
+        return;
+      }
+
+      resultsList.innerHTML = "";
+      resultBox.style.display = "none";
+      progress.style.display = "block";
+      setProgress(0);
+
+      let allSubs = new Set();
+      let domainIndex = 0;
+
+      for (const domain of domains) {
+        statusDomain.textContent = domain;
+
+        const subs = new Set();
+        let step = 0;
+        const totalSteps = shodanKey ? 4 : 3;
+
+        const updateStep = () => {
+          step++;
+          setProgress(((domainIndex + step / totalSteps) / domains.length) * 100);
+        };
+
+        try {
+          const crt = await fetch(`https://crt.sh/?q=%25.${domain}&output=json`);
+          if (crt.ok) {
+            const data = await crt.json();
+            data.forEach(entry => {
+              entry.name_value.split("\n").forEach(name => {
+                if (name.includes(domain)) subs.add(name.trim());
+              });
+            });
+          }
+        } catch (e) {}
+        updateStep();
+
+        try {
+          const ht = await fetch(`https://api.hackertarget.com/hostsearch/?q=${domain}`);
+          if (ht.ok) {
+            const text = await ht.text();
+            text.split("\n").forEach(line => {
+              const [sub] = line.split(",");
+              if (sub.includes(domain)) subs.add(sub.trim());
+            });
+          }
+        } catch (e) {}
+        updateStep();
+
+        try {
+          const bo = await fetch(`https://dns.bufferover.run/dns?q=.${domain}`);
+          if (bo.ok) {
+            const data = await bo.json();
+            (data.FDNS_A || []).forEach(record => {
+              const [ip, sub] = record.split(",");
+              if (sub && sub.includes(domain)) subs.add(sub.trim());
+            });
+          }
+        } catch (e) {}
+        updateStep();
+
+        if (shodanKey) {
+          try {
+            const shodan = await fetch(`https://api.shodan.io/dns/domain/${domain}?key=${shodanKey}`);
+            if (shodan.ok) {
+              const data = await shodan.json();
+              (data.subdomains || []).forEach(sub => {
+                subs.add(`${sub}.${domain}`);
+              });
+            }
+          } catch (e) {}
+          updateStep();
+        }
+
+        subs.forEach(sub => allSubs.add(sub));
+        domainIndex++;
+      }
+
+      const sortedSubs = Array.from(allSubs).sort();
+      currentResults = sortedSubs;
+      resultsList.innerHTML = "";
+      sortedSubs.forEach(sub => {
+        const li = document.createElement("li");
+        li.textContent = sub;
+        resultsList.appendChild(li);
+      });
+
+      subCount.textContent = `Found ${sortedSubs.length} subdomains:`;
+      resultBox.style.display = "block";
+    }
+
+    function downloadResults() {
+      const blob = new Blob([currentResults.join("\n")], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "subdomains.txt";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
