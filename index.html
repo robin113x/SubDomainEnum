@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Subdomain Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #ccc;
+    }
+    h1 {
+      text-align: center;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    ul {
+      margin-top: 20px;
+    }
+    li {
+      padding: 5px 0;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Subdomain Scanner</h1>
+    <input type="text" id="domainInput" placeholder="Enter domain (e.g. example.com)" />
+    <button onclick="scan()">Scan</button>
+    <ul id="results"></ul>
+  </div>
+
+  <script>
+    async function scan() {
+      const domain = document.getElementById("domainInput").value.trim();
+      const resultsList = document.getElementById("results");
+      resultsList.innerHTML = "<li>Scanning...</li>";
+
+      if (!domain || !domain.includes(".")) {
+        resultsList.innerHTML = "<li>Please enter a valid domain.</li>";
+        return;
+      }
+
+      const subs = new Set();
+
+      // crt.sh
+      try {
+        const crt = await fetch(`https://crt.sh/?q=%25.${domain}&output=json`);
+        if (crt.ok) {
+          const data = await crt.json();
+          data.forEach(entry => {
+            entry.name_value.split("\n").forEach(name => {
+              if (name.includes(domain)) subs.add(name.trim());
+            });
+          });
+        }
+      } catch (e) {}
+
+      // HackerTarget
+      try {
+        const ht = await fetch(`https://api.hackertarget.com/hostsearch/?q=${domain}`);
+        if (ht.ok) {
+          const text = await ht.text();
+          text.split("\n").forEach(line => {
+            const [sub] = line.split(",");
+            if (sub.includes(domain)) subs.add(sub.trim());
+          });
+        }
+      } catch (e) {}
+
+      // BufferOver
+      try {
+        const bo = await fetch(`https://dns.bufferover.run/dns?q=.${domain}`);
+        if (bo.ok) {
+          const data = await bo.json();
+          (data.FDNS_A || []).forEach(record => {
+            const [ip, sub] = record.split(",");
+            if (sub && sub.includes(domain)) subs.add(sub.trim());
+          });
+        }
+      } catch (e) {}
+
+      const sortedSubs = Array.from(subs).sort();
+      resultsList.innerHTML = "";
+
+      if (sortedSubs.length === 0) {
+        resultsList.innerHTML = "<li>No subdomains found.</li>";
+      } else {
+        sortedSubs.forEach(sub => {
+          const li = document.createElement("li");
+          li.textContent = sub;
+          resultsList.appendChild(li);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
