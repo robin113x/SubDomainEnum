@@ -94,6 +94,7 @@
   <div class="container">
     <h1>Subdomain Scanner</h1>
     <input type="text" id="domainInput" placeholder="Enter domain (e.g. example.com)" />
+    <input type="text" id="shodanKeyInput" placeholder="Enter Shodan API Key (optional)" />
     <button id="scanBtn" onclick="scan()">Scan</button>
     <button id="downloadBtn" onclick="downloadResults()" style="display: none;">Download Results</button>
     
@@ -107,7 +108,6 @@
   </div>
 
   <script>
-    const SHODAN_API_KEY = 'YOUR_SHODAN_API_KEY'; // Replace with your actual Shodan API Key
     let currentResults = [];
 
     function setProgress(percent) {
@@ -115,9 +115,9 @@
       document.getElementById('progressBar').style.width = percent + '%';
     }
 
-    async function fetchShodan(domain, subs) {
+    async function fetchShodan(domain, subs, apiKey) {
       try {
-        const response = await fetch(`https://api.shodan.io/dns/domain/${domain}?key=${SHODAN_API_KEY}`);
+        const response = await fetch(`https://api.shodan.io/dns/domain/${domain}?key=${apiKey}`);
         if (response.ok) {
           const data = await response.json();
           (data.subdomains || []).forEach(sub => {
@@ -131,6 +131,7 @@
 
     async function scan() {
       const domain = document.getElementById("domainInput").value.trim();
+      const shodanKey = document.getElementById("shodanKeyInput").value.trim();
       const resultsList = document.getElementById("results");
       const downloadBtn = document.getElementById("downloadBtn");
       const scanBtn = document.getElementById("scanBtn");
@@ -145,11 +146,13 @@
 
       scanBtn.disabled = true;
       document.getElementById("domainInput").disabled = true;
+      document.getElementById("shodanKeyInput").disabled = true;
 
       if (!domain || !domain.includes(".")) {
         resultsList.innerHTML = "<li>Please enter a valid domain.</li>";
         scanBtn.disabled = false;
         document.getElementById("domainInput").disabled = false;
+        document.getElementById("shodanKeyInput").disabled = false;
         return;
       }
 
@@ -159,9 +162,10 @@
 
       const updateStep = () => {
         step++;
-        setProgress((step / 4) * 100);
+        setProgress((step / (shodanKey ? 4 : 3)) * 100);
       };
 
+      // crt.sh
       try {
         const crt = await fetch(`https://crt.sh/?q=%25.${domain}&output=json`);
         if (crt.ok) {
@@ -175,6 +179,7 @@
       } catch (e) {}
       updateStep();
 
+      // HackerTarget
       try {
         const ht = await fetch(`https://api.hackertarget.com/hostsearch/?q=${domain}`);
         if (ht.ok) {
@@ -187,6 +192,7 @@
       } catch (e) {}
       updateStep();
 
+      // BufferOver
       try {
         const bo = await fetch(`https://dns.bufferover.run/dns?q=.${domain}`);
         if (bo.ok) {
@@ -199,8 +205,11 @@
       } catch (e) {}
       updateStep();
 
-      await fetchShodan(domain, subs);
-      updateStep();
+      // Shodan (if key provided)
+      if (shodanKey) {
+        await fetchShodan(domain, subs, shodanKey);
+        updateStep();
+      }
 
       const sortedSubs = Array.from(subs).sort();
       currentResults = sortedSubs;
@@ -224,6 +233,7 @@
 
       scanBtn.disabled = false;
       document.getElementById("domainInput").disabled = false;
+      document.getElementById("shodanKeyInput").disabled = false;
     }
 
     function downloadResults() {
