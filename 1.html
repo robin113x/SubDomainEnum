@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deep Subdomain Scanner</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9fb;
+      margin: 0;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 2.5em;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    p.subtitle {
+      color: #555;
+      margin-bottom: 30px;
+      font-size: 1.1em;
+    }
+    .scanner-box {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+      text-align: left;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .input-row input {
+      flex: 1;
+      padding: 12px 15px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .input-row button {
+      background: #9f7aea;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .input-row button:hover {
+      background: #7c5dca;
+    }
+    .progress-wrapper {
+      margin-top: 20px;
+      display: none;
+    }
+    .progress-bar-container {
+      background-color: #eee;
+      height: 10px;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 10px;
+      background-color: #28a745;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+    .badge {
+      display: inline-block;
+      background: #e6ffed;
+      color: #28a745;
+      padding: 5px 12px;
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 14px;
+      margin-left: 10px;
+    }
+    .subdomain-results {
+      margin-top: 20px;
+    }
+    .subdomain-results h3 {
+      margin: 0 0 10px 0;
+    }
+    ul {
+      padding: 0;
+      list-style: none;
+      margin-top: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    li {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    .download-btn {
+      margin-top: 15px;
+      background-color: #28a745;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Deep Subdomain Scanner</h1>
+  <p class="subtitle">Find subdomains using multiple sources including DNS, SSL certificates, AlienVault, HackerTarget, and more</p>
+
+  <div class="scanner-box">
+    <div class="input-row">
+      <input type="text" id="domainInput" placeholder="example.com">
+      <input type="text" id="shodanKeyInput" placeholder="Shodan API">
+      <button onclick="scan()">Start Deep Scan</button>
+    </div>
+
+    <div class="progress-wrapper" id="progressWrapper">
+      <strong id="statusDomain"></strong>
+      <span class="badge" id="statusBadge">Completed</span>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <div class="subdomain-results" id="resultSection" style="display:none;">
+      <h3 id="subCount">Found 0 subdomains:</h3>
+      <ul id="results"></ul>
+      <button class="download-btn" onclick="downloadResults()">Download TXT</button>
+    </div>
+  </div>
+
+  <script>
+    let currentResults = [];
+
+    function setProgress(percent) {
+      const bar = document.getElementById("progressBar");
+      bar.style.width = percent + "%";
+    }
+
+    async function scan() {
+      const domain = document.getElementById("domainInput").value.trim();
+      const shodanKey = document.getElementById("shodanKeyInput").value.trim();
+      const resultsList = document.getElementById("results");
+      const progress = document.getElementById("progressWrapper");
+      const resultBox = document.getElementById("resultSection");
+      const subCount = document.getElementById("subCount");
+      const statusDomain = document.getElementById("statusDomain");
+
+      resultsList.innerHTML = "";
+      resultBox.style.display = "none";
+      progress.style.display = "block";
+      statusDomain.textContent = domain;
+
+      if (!domain || !domain.includes(".")) {
+        alert("Please enter a valid domain.");
+        return;
+      }
+
+      const subs = new Set();
+      let step = 0;
+      const totalSteps = shodanKey ? 4 : 3;
+
+      const updateStep = () => {
+        step++;
+        setProgress((step / totalSteps) * 100);
+      };
+
+      try {
+        const crt = await fetch(`https://crt.sh/?q=%25.${domain}&output=json`);
+        if (crt.ok) {
+          const data = await crt.json();
+          data.forEach(entry => {
+            entry.name_value.split("\n").forEach(name => {
+              if (name.includes(domain)) subs.add(name.trim());
+            });
+          });
+        }
+      } catch (e) {}
+      updateStep();
+
+      try {
+        const ht = await fetch(`https://api.hackertarget.com/hostsearch/?q=${domain}`);
+        if (ht.ok) {
+          const text = await ht.text();
+          text.split("\n").forEach(line => {
+            const [sub] = line.split(",");
+            if (sub.includes(domain)) subs.add(sub.trim());
+          });
+        }
+      } catch (e) {}
+      updateStep();
+
+      try {
+        const bo = await fetch(`https://dns.bufferover.run/dns?q=.${domain}`);
+        if (bo.ok) {
+          const data = await bo.json();
+          (data.FDNS_A || []).forEach(record => {
+            const [ip, sub] = record.split(",");
+            if (sub && sub.includes(domain)) subs.add(sub.trim());
+          });
+        }
+      } catch (e) {}
+      updateStep();
+
+      if (shodanKey) {
+        try {
+          const shodan = await fetch(`https://api.shodan.io/dns/domain/${domain}?key=${shodanKey}`);
+          if (shodan.ok) {
+            const data = await shodan.json();
+            (data.subdomains || []).forEach(sub => {
+              subs.add(`${sub}.${domain}`);
+            });
+          }
+        } catch (e) {}
+        updateStep();
+      }
+
+      const sortedSubs = Array.from(subs).sort();
+      currentResults = sortedSubs;
+      resultsList.innerHTML = "";
+      sortedSubs.forEach(sub => {
+        const li = document.createElement("li");
+        li.textContent = sub;
+        resultsList.appendChild(li);
+      });
+
+      subCount.textContent = `Found ${sortedSubs.length} subdomains:`;
+      resultBox.style.display = "block";
+    }
+
+    function downloadResults() {
+      if (!currentResults.length) return;
+      const blob = new Blob([currentResults.join("\n")], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "subdomains.txt";
+      a.click();
+    }
+  </script>
+</body>
+</html>
