@@ -111,18 +111,44 @@
 </head>
 <body>
 <nav style="
-  background-color: #1f2937;
-  padding: 15px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  padding: 16px 24px;
   display: flex;
   justify-content: center;
-  gap: 30px;
-  font-size: 16px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  gap: 40px;
+  font-size: 17px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  border-radius: 12px;
 ">
-  <a href="1.html" style="color: #fff; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Page 1</a>
-  <a href="2.html" style="color: #fff; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Page 2</a>
-  <a href="3.html" style="color: #fff; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Page 3</a>
+  <a href="1.html" style="
+    color: #ffffff;
+    text-decoration: none;
+    position: relative;
+    transition: all 0.3s ease;
+  " 
+  onmouseover="this.style.color='#ffe066'; this.style.transform='scale(1.1)';" 
+  onmouseout="this.style.color='#ffffff'; this.style.transform='scale(1)';">Page 1</a>
+
+  <a href="2.html" style="
+    color: #ffffff;
+    text-decoration: none;
+    position: relative;
+    transition: all 0.3s ease;
+  " 
+  onmouseover="this.style.color='#ffe066'; this.style.transform='scale(1.1)';" 
+  onmouseout="this.style.color='#ffffff'; this.style.transform='scale(1)';">Page 2</a>
+
+  <a href="3.html" style="
+    color: #ffffff;
+    text-decoration: none;
+    position: relative;
+    transition: all 0.3s ease;
+  " 
+  onmouseover="this.style.color='#ffe066'; this.style.transform='scale(1.1)';" 
+  onmouseout="this.style.color='#ffffff'; this.style.transform='scale(1)';">Page 3</a>
 </nav>
+
   <h1>Deep Subdomain Scanner</h1>
   <p class="subtitle">Find subdomains using multiple sources including DNS, SSL certificates, AlienVault, HackerTarget, and more</p>
 
