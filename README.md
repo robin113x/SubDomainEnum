@@ -1,7 +1,7 @@
 # 🌐 DNS Subdomain OSINT Scanner
 
 ![GitHub Pages](https://img.shields.io/badge/Deployed-GitHub%20Pages-blue?logo=github)
-![License](https://img.shields.io/github/license/<username>/<repo>)
+
 🔗 [SubDomainEnum](https://robin113x.github.io/SubDomainEnum/)
  
 A lightweight, web-based **passive reconnaissance tool** designed to discover subdomains using **public and free OSINT sources** — without making active or intrusive requests.  
